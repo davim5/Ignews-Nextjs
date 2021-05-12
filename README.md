@@ -1,26 +1,62 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# Adicionando Typescript ao Projeto
+# Estilização com SASS
 
-# Adicionando junto com as tipagens
+- Pasta styles na pasta src
 
-- Tipagens do react e node
+# Scoped CSS
 
-```jsx
-yarn add typescript @types/react @types/node -D
-```
+- Funcionamento por padrão no Next.
+- Um CSS nunca afetar outro componente, sempre fica "escopado", aplicado ao escopo de um único componente.
 
-- Trocar nome dos arquivos de js para tsx
-- Ele vai criar as configurações e arquivos quando rodar.
+# Styled Components vs CSS Tradicional
 
-# No _app
+- Style Components é muito utilzaido
+- Não precisar ser utilizado em toda aplicação
+- Em algumas aplicações é como "Matar um formiga com uma bazuca"
+- Trás complexidades à mais que o CSS Tradicional.
+- Trás custo de performance maior que CSS Tradicional.
 
-- mportar de next/app as ppropriedades do App → **AppProps**
+# Como usar CSS Scoped?
+
+- Mudar arquivo CSS para terminar com .module.css
+    - Usa CSS modules
+- Importar na pasta do página.
+- Não deixa fazer estilizações de forma direta.
+- Não deixa CSS ser compartilhado entre mais de um componente
+
+# SASS
+
+- Só instalar o SASS.
 
 ```tsx
-import { AppProps } from ' next/app'
+yarn add sass
+```
 
-function MyApp({Component,pageProps}:AppProps){
-	return <Component {...pageProps}/>
+- mudar arquivo para module.scss
+- Permite usar CSS em cascata.
+
+```sass
+.title{
+    color: red;
+
+    span {
+        color:blue;
+    }
+}
+```
+
+# Usando
+
+- Importar o arquivo de estilização em variável styles.
+- Chamar a classe como *styles.nomedaclasse*
+
+```tsx
+import styles from '../styles/home.module.scss'
+
+export default function Home() {
+  return (
+    <h1 className={styles.title}>Hello <span>Mundo</span></h1>
+  )
 }
 ```
