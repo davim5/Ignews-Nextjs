@@ -1,20 +1,26 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# Criando Estrutura Next.js
+# Adicionando Typescript ao Projeto
 
-# Criando projeto
+# Adicionando junto com as tipagens
 
-- Instalando com a própria estrutura do Next
-- É igualzinho o React, só adiciona algumas funcionalidades
+- Tipagens do react e node
 
 ```jsx
-yarn create next-app nomedoprojeto
+yarn add typescript @types/react @types/node -D
 ```
 
-- Deletar
-    - pasta styles
-        - criar do zero
-    - favicon e logo de vercel
-    - pasta api
-    - Deletar coisas do componente Home no index.js
-    - Remover importações do _app.js
+- Trocar nome dos arquivos de js para tsx
+- Ele vai criar as configurações e arquivos quando rodar.
+
+# No _app
+
+- mportar de next/app as ppropriedades do App → **AppProps**
+
+```tsx
+import { AppProps } from ' next/app'
+
+function MyApp({Component,pageProps}:AppProps){
+	return <Component {...pageProps}/>
+}
+```
