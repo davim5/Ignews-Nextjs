@@ -1,34 +1,29 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 05 - Título Dinâmico por Página
+# 06 - Estilos Globais do App
 
-- vai dar um erro de usarmos a tag title diretamente dentro do _doc.
-- Seria como se tivesse o mesmo título para todas páginas.
-- O ideal seria ter um título diferente para cada página
+- Estilos compartilhados em todas as páginas.
+- criar um global.scss
+    - **Sem o "module", pois com o module o css importado ficaria disponível só para o componente que o importou.**
+- **Importar o global dentro do _app**
+- CSS não pode ser importado no _document
+    - Está num nível de renderização que não está pronto pro CSS.
+    - É um nível muito próximo ao CSS.
+---
+# Padronização das cores
 
-# Como?
+- É interessante organizar as variáveis CSS das cores de acordo com a intensidade de cada cor.
+- Sendo quanto maior o número ao lado, mais forte a "iluminação" da cor é.
 
-- Tirar o title
-- Ir para página que deve informar o proprio título
-- Importar Head from 'next/head'
-    - **Componente React que podemos colocar em qualquer lugar da tela e tudo que for jogado dentro do Head, vai ser anexado ao Head do _document.**
-- Podemos passar meta tags
-    - Bom para informações de SEO.
-    - keywords..
-- Colocar title dentro do Head.
+```sass
+:root{
+    --white: #FFFFFF;
 
-```tsx
-import Head from 'next/head';
-import styles from '../styles/home.module.scss';
-
-export default function Home() {
-  return (
-    <>
-    <Head>
-      <title>ig news | Home</title>
-    </Head>
-    <h1 className={styles.title}>Hello <span>Mundo</span></h1>
-    </>
-  )
+    --gray-100: #e1e1e6;
+    --gray-300: #a8a8b3;
+    --gray-900: #121214;
+    
+    --cyan-500: #61dafb;
+    --yellow-500: #eba417;
 }
 ```
