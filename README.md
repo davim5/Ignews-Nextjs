@@ -1,152 +1,77 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 10 - Consumindo a API do Stripe (SSR)
+# 12 - Static Side Generation (SSG)
 
-# Por que precisamos dessas informações?
+# O que é?
 
-- Pode ser que algo mude, então precisamos que reflita a configuração do stripe.
-- Quando se clica em subscribe, precisamos fazer a referência de qual produto estamos nos inscrevendo.
+- O processo é semelhante ao SSR.
+- A partir do momento que uma pessoa acessa aplicação e faz todo o fluxo
+    - Next > Chamadas > Gerar HTML
+- Além do Next retornar diretamente pro browser o HTML gerado, ele vai salvar om HTML como um arquivo físico. (Arquivo HTML estático).
+- Assim, da proxima vez que a tela for acessada novamente, ele retorna o HTML estático direto pro broswer sem fazer nenhuma chamada.
 
-# Chama à API
+# Como aplicar?
 
-## Antes usaríamos useState() useEffect()
-
-- Essa chama iria acontecer somente no browser, depois da interface estar premontada
-- Isso geraria duas coisas
-    1. A interface vai ser exibida em primeiro momento sem o preço, até que ele carregue a informação (layout-shift)
-        - Alteração da página percebida pelo usuário
-    2. Se for indexar a página no google, ele não iria indexar esse preço.
-
-## Agora usaremos Server-side Rendering
-
-- Fazer chamadas à API, não broswer, mas no Next.js
-- Não precisaria ser em todas as páginas, só em informações importantes.
-
-### Fazendo chama
-
-- Dentro de uma página do Next.js
-- **Funciona em páginas, não em componentes.**
-    - **Se quiser ter acesso dentro do componente à alguma informação SSR, preciso passar da página para o componente**
-- Na página Home
-- Exportar uma função const **getServerSideProp**s
-    - Precisa ser esse nome, não pode ser outro
-- Assícrona -< async ()
-- De dentro do Next.js vamos importar um tipagem GetServerSideProps.
+- Trocar **GetServerSideProps** por **GetStaticProps.**
+    - Importar e trocar
+- Além disso, tem o **revalidate:**
+    - Em quanto tempo, em segundos, quero que essa página seja revalidada(Reconstruída)?
+    - Ex: Se dentro de um minuto, várias pessoas acessarem a mesma página vão ver o mesmo HTML.
+        - Depois desse minuto, a página será gerada novamente, revalidando o conteúdo da página se houve alguma mudança.
 
 ```tsx
-export const getServerSideProps: GetServerSideProps = async () => {
-	return {
-		props: {
-			nome: 'Diego'
-		}
-	}
-}
-```
-
----
-
-# Função getServerSideProps
-
-- Dessa função pode devolver: redirect, notFound, props
-- Tudo que for repassado nesse retorno como propriedade, pode-se acessar nas props do componente.
-
-```tsx
-export const getServerSideProps:GetServerSideProps = async () =>{
-  return{
-
-  }
-}
-```
-
-- Todo código dentro dessa função é executado dentro do servidor Node (Next.js)
-- Podemos ter acesso no terminal
-
----
-
-# Instalar Stripe
-
-```tsx
-yarn add stripe
-```
-
-- Criar pasta services
-- Criar stripe.ts
-
-    ## Configurando Stripe
-
-    - Vai definir conexão com stripe
-    - É uma biblioteca para lidar com a API do stripe sem precisar fazer as requisições HTTP
-- Passamos a secret key
-- apiVersion → versão utilizada
-- appInfo → informações de metadados
-    - name → nome da aplicação
-    - version → versão no package JSON
-        - Pode-se importar direto do package.json
-
-```tsx
-import Stripe from 'stripe'
-import { version } from '../../package.json'
-
-export const stripe = new Stripe(
-	process.env.STRIPE_API_KEY,
-	{
-		apiVersion: '2020-08-27',
-		appInfo: {
-			name: 'Ignews',
-			version
-		}
-	}
-)
-```
-
----
-
-# Setando getServerSideProps
-
-- importar a configuração do stripe criada.
-    - Com a API do stripe é mais fácil do que com HTTP, pois ele já mostra todas as opções possíveis
-- await stripe.prices.retrieve
-    - Passar a key do produto
-- expand:['product']
-    - Daria acesso à todas as informações do produto.
-- Criar objeto product
-    - priceId: price.id
-    - amount: price.unit_amount / 100 → Salvar em centavos é muito mais fácil de lidar e manipular.
-    - priceId: price.id
-- Retornar o product nas props
-
-```tsx
-export const getServerSideProps:GetServerSideProps = async () =>{
+export const getStaticProps:GetServerSideProps = async () =>{
   const price = await stripe.prices.retrieve('price_1IqVj5GFhz5DUpN4Nt2aLZPB')
   
   const product = {
     priceId: price.id,
-    amount: price.unit_amount / 100, // Em centavos
+    amount: new Intl.NumberFormat('en-US', {
+      style:'currency',
+      currency:'USD',
+    }).format(price.unit_amount / 100), // Em centavos
   };
 
   return{
     props:{
       product
-    }
+    },
+		revalidate: 60 * 60 * 24 // 24 horas
   }
 }
 ```
 
-- Pegar props no Componente
+# Outras diferenças
 
-    ```tsx
-    export default function Home({product}:HomeProps)
-    ```
+- Enquanto o SSG é mais performático, o SSR permite ser mais dinâmico.
+- SSG só pode ser usado para páginas que serão iguais para todos.
+- SSR pode utilizar dados dinâmicos, como nome do usuário logado.
+- Nenhum dos dois substituem totalmente uma chamada API que pode ser feita direto pelo componente
+    - **Se não há necessidade de trazer informação do servidor por motivos de indexação ou motores de busca, na maioria das vezes, é melhor fazer pelo cliente. Se for muito custosa, pode ser melhor fazer estática.**
 
-    - Criar interface do props.
+# Resumo
 
-```tsx
-interface HomeProps{
-  product:{
-    priceId: string;
-    amount: number;
-  }
-}
-```
+- No React há 3 formas principais de fazer chamada API.
 
-- Formatar preço
+## Client-side Rendering
+
+- Outros casos. Não precisa de indexação. Informação carregada a partir de ação do usuário, não necessariamente quando a página carrega.
+
+## Server-side Rendering
+
+- Vai utilizar quando precisa da indexação, mas também precisa de dados dinâmicos da sessão do usuário. Informação em tempo real. do usuário
+- Tudo que é feito dentro do server-side, vai exigir mais processamento/tempo.
+    - Exemplo: Nome do usuário
+
+## Static Site Generation
+
+- Vai utilizar para casos de gerar um HTML que será o mesmo para todas as pessoas que irão acessar a aplicação.
+- Ex: Home de blog, post do blog, página de um produto, página de categoria.
+    - São páginas iguais para todos e que precisam de indexação (SEO)
+
+## Exemplo Geral
+
+- Post do blog
+    - Conteúdo do Post → SSG
+        - O mais importante e igual para todos.
+    - Sessão de comentários → Client-side
+        - Pois não é tão importante e precisamos em tempo real.
