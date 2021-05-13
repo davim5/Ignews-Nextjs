@@ -1,29 +1,40 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 06 - Estilos Globais do App
+# 07 - Componente: Header
 
-- Estilos compartilhados em todas as páginas.
-- criar um global.scss
-    - **Sem o "module", pois com o module o css importado ficaria disponível só para o componente que o importou.**
-- **Importar o global dentro do _app**
-- CSS não pode ser importado no _document
-    - Está num nível de renderização que não está pronto pro CSS.
-    - É um nível muito próximo ao CSS.
+- Aqui a estrutura de pastas não muda do projeto React comum.
+- Pasta Componentes
+    - Arquivos index.tsx e styles.module.scss
+
 ---
-# Padronização das cores
 
-- É interessante organizar as variáveis CSS das cores de acordo com a intensidade de cada cor.
-- Sendo quanto maior o número ao lado, mais forte a "iluminação" da cor é.
+# Importando imagens
 
-```sass
-:root{
-    --white: #FFFFFF;
+- No Next.js, as imagens ficam sempre dentro da pasta **public**.
+- Importamos sempre com barra na frente e o nome da pasta ou arquivo diretamente dentro de public.
+- Não precisamos importar a imagem por dentro do arquivo tsx.
+- Pode importar se quiser usando next-images
 
-    --gray-100: #e1e1e6;
-    --gray-300: #a8a8b3;
-    --gray-900: #121214;
-    
-    --cyan-500: #61dafb;
-    --yellow-500: #eba417;
+---
+
+# Elemento em todas as páginas
+
+- Como o header vai estar em todas as páginas da aplicação, importamos ela no _app.
+- Lembro de colocar o fragment "<>" entre os dois componentes.
+
+```tsx
+import { AppProps } from 'next/app'
+import { Header } from '../components/Header';
+import '../styles/global.scss';
+
+function MyApp({ Component, pageProps }:AppProps) {
+  return (
+    <>
+      <Header/> 
+      <Component {...pageProps} />
+    </>
+  );
 }
+
+export default MyApp
 ```
