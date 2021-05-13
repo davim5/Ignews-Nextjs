@@ -1,40 +1,71 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 07 - Componente: Header
+# 08 - Componente: SignInButton
 
-- Aqui a estrutura de pastas não muda do projeto React comum.
-- Pasta Componentes
-    - Arquivos index.tsx e styles.module.scss
+- Criar como componente isolado
+
+# Por que?
+
+- Terá dois funcionamentos
+    - Ao clicar: fazer toda a questão da autenticação
+    - Vai ter dois estados, tem comportamento.
+        - Logado
+        - Não logado
+    - Esse comportamento não é necessário fora do contexto dele.
+- Queremos isolar os comportamentos que não pertencem ao restante do App.
+
+## Por pertencer ao Header, posso colocar dentro da pasta Header?
+
+- Sim, é bom em projetos maiores.
+- Nessa caso, não colocaremos
 
 ---
 
-# Importando imagens
+# React Icons
 
-- No Next.js, as imagens ficam sempre dentro da pasta **public**.
-- Importamos sempre com barra na frente e o nome da pasta ou arquivo diretamente dentro de public.
-- Não precisamos importar a imagem por dentro do arquivo tsx.
-- Pode importar se quiser usando next-images
-
----
-
-# Elemento em todas as páginas
-
-- Como o header vai estar em todas as páginas da aplicação, importamos ela no _app.
-- Lembro de colocar o fragment "<>" entre os dois componentes.
+- Biblioteca com vários ícones úteis.
 
 ```tsx
-import { AppProps } from 'next/app'
-import { Header } from '../components/Header';
-import '../styles/global.scss';
+yarn add react-icons
+```
 
-function MyApp({ Component, pageProps }:AppProps) {
-  return (
-    <>
-      <Header/> 
-      <Component {...pageProps} />
-    </>
-  );
+- Insere como um componente.
+
+```tsx
+<button 
+type="button"
+className={styles.signInButton}>
+    <FaGithub color="#04d361"/>
+    Davi Lima
+    <FiX color="#737380" className={styles.closeIcon}/>
+</button>
+```
+
+- Mudando cor e o elemento de acordo com um "estado"
+
+```tsx
+import { FaGithub } from 'react-icons/fa'
+import { FiX } from 'react-icons/fi';
+import styles from './styles.module.scss';
+
+export function SignInButton(){
+    const isUserLoggedIn = true;
+
+    return isUserLoggedIn ? (
+        <button 
+        type="button"
+        className={styles.signInButton}>
+            <FaGithub color="#04d361"/>
+            Davi Lima
+            <FiX color="#737380" className={styles.closeIcon}/>
+        </button>
+    ) : (
+        <button 
+        type="button"
+        className={styles.signInButton}>
+            <FaGithub color="#eba417"/>
+            Sign in with Github
+        </button>
+    );
 }
-
-export default MyApp
 ```
