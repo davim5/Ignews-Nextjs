@@ -1,77 +1,148 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 12 - Static Side Generation (SSG)
+# 13 - Autenticação com Next Auth
 
-# O que é?
-
-- O processo é semelhante ao SSR.
-- A partir do momento que uma pessoa acessa aplicação e faz todo o fluxo
-    - Next > Chamadas > Gerar HTML
-- Além do Next retornar diretamente pro browser o HTML gerado, ele vai salvar om HTML como um arquivo físico. (Arquivo HTML estático).
-- Assim, da proxima vez que a tela for acessada novamente, ele retorna o HTML estático direto pro broswer sem fazer nenhuma chamada.
-
-# Como aplicar?
-
-- Trocar **GetServerSideProps** por **GetStaticProps.**
-    - Importar e trocar
-- Além disso, tem o **revalidate:**
-    - Em quanto tempo, em segundos, quero que essa página seja revalidada(Reconstruída)?
-    - Ex: Se dentro de um minuto, várias pessoas acessarem a mesma página vão ver o mesmo HTML.
-        - Depois desse minuto, a página será gerada novamente, revalidando o conteúdo da página se houve alguma mudança.
+- Seguir guia do NextAuth
+- [https://next-auth.js.org/getting-started/example](https://next-auth.js.org/getting-started/example)
+- Instalar ela e as tipagens
 
 ```tsx
-export const getStaticProps:GetServerSideProps = async () =>{
-  const price = await stripe.prices.retrieve('price_1IqVj5GFhz5DUpN4Nt2aLZPB')
-  
-  const product = {
-    priceId: price.id,
-    amount: new Intl.NumberFormat('en-US', {
-      style:'currency',
-      currency:'USD',
-    }).format(price.unit_amount / 100), // Em centavos
-  };
-
-  return{
-    props:{
-      product
-    },
-		revalidate: 60 * 60 * 24 // 24 horas
-  }
-}
+yarn add next-auth
+yarn add @types/next-auth -D
 ```
 
-# Outras diferenças
+---
 
-- Enquanto o SSG é mais performático, o SSR permite ser mais dinâmico.
-- SSG só pode ser usado para páginas que serão iguais para todos.
-- SSR pode utilizar dados dinâmicos, como nome do usuário logado.
-- Nenhum dos dois substituem totalmente uma chamada API que pode ser feita direto pelo componente
-    - **Se não há necessidade de trazer informação do servidor por motivos de indexação ou motores de busca, na maioria das vezes, é melhor fazer pelo cliente. Se for muito custosa, pode ser melhor fazer estática.**
+# Github
 
-# Resumo
+- Criar uma aplicação por ambiente.
+    - Um pra desenvolvimento
+    - Outro pra produção
 
-- No React há 3 formas principais de fazer chamada API.
+Github → Settings → Developer Settings → OAuth Settings → New OAuth App
 
-## Client-side Rendering
+- Nome da aplicação
+- URL →
+- Descrição opcional
+- Authorization callback → http://localhost:3000/api/auth/callback
 
-- Outros casos. Não precisa de indexação. Informação carregada a partir de ação do usuário, não necessariamente quando a página carrega.
+```tsx
+import NextAuth from 'next-auth'
+import Providers from 'next-auth/providers'
 
-## Server-side Rendering
+export default NextAuth({
+  // Configure one or more authentication providers
+  providers: [
+    Providers.GitHub({
+      clientId: process.env.GITHUB_ID,
+      clientSecret: process.env.GITHUB_SECRET,
+      scope:'read-user'
+    }),
+    
+    // ...add more providers here
+  ],
+})
+```
 
-- Vai utilizar quando precisa da indexação, mas também precisa de dados dinâmicos da sessão do usuário. Informação em tempo real. do usuário
-- Tudo que é feito dentro do server-side, vai exigir mais processamento/tempo.
-    - Exemplo: Nome do usuário
+# Variáveis ambiente
 
-## Static Site Generation
+GITHUB_CLIENT_ID=
 
-- Vai utilizar para casos de gerar um HTML que será o mesmo para todas as pessoas que irão acessar a aplicação.
-- Ex: Home de blog, post do blog, página de um produto, página de categoria.
-    - São páginas iguais para todos e que precisam de indexação (SEO)
+GITHUB_CLIENT_SECRET=
 
-## Exemplo Geral
+# Scope
 
-- Post do blog
-    - Conteúdo do Post → SSG
-        - O mais importante e igual para todos.
-    - Sessão de comentários → Client-side
-        - Pois não é tão importante e precisamos em tempo real.
+- Quais informações quero ter acesso dos usuários.
+- [https://docs.github.com/en/developers/apps/authorizing-oauth-apps](https://docs.github.com/en/developers/apps/authorizing-oauth-apps)
+- scope: 'read:user' (mais básico)
+
+```tsx
+      scope:'read-user'
+```
+
+---
+
+# No botão
+
+- No componente que precisa realizar a autenticação
+- Importar signIn de next-auth/client
+    - Faz a autenticação do usuário.
+- onClick={() ⇒ signIn('')}
+- signIn recebe informação do tipo de autenticação, no caso 'github'.
+
+```tsx
+import { signOut, signIn, useSession } from 'next-auth/client'
+
+export function SignInButton(){
+  const [session] = useSession();
+
+  return session ? (
+    <button 
+    type="button"
+    className={styles.signInButton}
+    onClick={()=>signOut()}
+    >
+        <FaGithub color="#04d361"/>
+        Davi Lima
+        <FiX color="#737380" className={styles.closeIcon}/>
+    </button>
+```
+
+# Hook useSession
+
+- Retorna informação de que se usuário está logado ou não
+
+```tsx
+const [session] = useSession();
+```
+
+- Agora em vez da variável, usamos o sessions para verificar se está logado ou não.
+
+```tsx
+return session ? () : ()
+```
+
+---
+
+# Informações conectadas
+
+- Todos os componentes precisam ter acesso à essa informação.
+- Usando contexto.
+
+## no _app.tsx
+
+- Importar Provider do next-auth/client.
+    - Como pode ter mais de um, é bom renomear com o que eles são:
+
+        ```tsx
+        import { Provider as NextAuthProvider } from 'next-auth/client'
+        ```
+
+- Trocar o frament pelo provider.
+- Passar um propriedade *session={pageProps.session}.*
+    - As informações ativas de estar logado ou não vai chegar mesmo com refresh.
+
+```tsx
+import { AppProps } from 'next/app'
+import { Header } from '../components/Header';
+import '../styles/global.scss';
+import { Provider as NextAuthProvider } from 'next-auth/client';
+
+function MyApp({ Component, pageProps }:AppProps) {
+  return (
+    <NextAuthProvider session={pageProps.session}>
+      <Header/> 
+      <Component {...pageProps} />
+    </NextAuthProvider>
+  );
+}
+
+export default MyApp
+```
+
+**OBS: Sempre reiniciar o servidor ao mudar variáveis ambiente**
+
+# Logout
+
+- Importar signOut de 'nex-auth/client'
+- Disparar a função com onClick no botão.
