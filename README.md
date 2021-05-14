@@ -1,120 +1,94 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 16 - Gerando Sessão de Checkout
-# Checkout session
+# 17 - Redirecionando para o Stripe
 
-- Uma url que redireciona usuário
-- Ele preencher informações de pagamento
-- É redirecionado de volta.
+- Chamar a requisição
 
-# Criar função handleSubscribe
+# Instalar axios
 
-- Saber se o usuário está logado
-    - useSession()
-    - Se ele não existir session, redirecionar para autenticação com github
-    - retornar
-- Se ele está logado
-- **Criação de checkout session**
-
-    [https://stripe.com/docs/api/checkout/sessions](https://stripe.com/docs/api/checkout/sessions)
-
-- Executar a função do stripe.
-- Não vai funcionar no componente do botão pois,
-    - Não teria como ter acesso à Key privada
+- Criar api.ts na services
+- importar
+- baseURL: /api
 
 ```tsx
-function handleSubscribe(){
+import axios from 'axios';
+
+export const api = axios.create({
+    baseURL:'/api',
+})
+```
+
+# Chamar rota
+
+- No handleSubscribe
+    - api.post('/subscribe')
+        - subscribe pois o nome da rota é sempre o nome da pasta.
+    - da resposta, pegar o sessionId
+- Redirecionar usuário
+    - stripe tem duas sdks
+        - Uma pra backend
+        - Outra pro frontend
+    - outro service : stripe.js.ts
+    - instalar outra biblioteca
+        - @stripe/stripe-js
+    - importar loadString de
+    - exportar função assíncrona getStripeJs()
+        - Passara chave pública do stripe
+            - Em developers > API keys
+        - Criar variável ambiente com NEXT_PUBLIC.
+            - É a única forma de uma variável ambiente ser acessada pelo front-end.
+
+        ```tsx
+        import { loadStripe } from '@stripe/stripe-js';
+
+        export async function getStripeJs(){
+            const stripeJs = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY)
+            return stripeJs
+        }
+        ```
+
+```tsx
+import { session, signIn } from 'next-auth/client';
+import { useEffect } from 'react';
+import { api } from '../../services/api';
+import { getStripeJs } from '../../services/stripe.js';
+import styles from './styles.module.scss';
+
+interface SubscribeButtonProps{
+    priceId:string;
+}
+
+export function SubscribeButton({priceId}:SubscribeButtonProps){
+    
+    async function handleSubscribe(){
         if (!session){
             signIn('github');
             return;
         }
+
+        try{
+            const response = await api.post('/subscribe');
+
+            const { sessionId  } = response.data;
+
+            const stripe = await getStripeJs();
+
+            await stripe.redirectToCheckout({ sessionId })
+        }catch(err){
+            alert(err.message);
+        }
     }
-```
-
-- Há 3 opções viáveis
-    - getStaticProps (SSG) → Só utilizado quando página é renderizada.
-    - getServerSideProps (SSR)  → Só utilizado quando página é renderizada.
-    - **API routes**
-- Na pasta auth
-- criar arquivo subscribe.ts
-
-# Função de Checkout
-
-- exportar função assícrona
-
-```tsx
-import { NextApiRequest, NextApiResponse } from "next";
-import { getSession } from "next-auth/client";
-import { env } from "process";
-import { stripe } from "../../services/stripe";
-
-export default async (req:NextApiRequest, res:NextApiResponse) => {
-    // Checar se é POST
-    if(req.method === 'POST'){
-        const session = await getSession({ req });
-
-        const stripeCustomer = await stripe.customers.create({
-            email: session.user.email,
-            // metadata
-        })
-
-        const stripeCheckoutSession = await stripe.checkout.sessions.create({ 
-            customer: stripeCustomer.id,
-            payment_method_types: ['card'],
-            billing_address_collection: 'required',
-            line_items: [
-                { price: 'price_1IqVj5GFhz5DUpN4Nt2aLZPB', quantity:1}
-            ],
-            mode:'subscription',
-            allow_promotion_codes: true,
-            success_url: process.env.STRIPE_SUCESS_URL,
-            cancel_url: process.env.STRIPE_CANCEL_URL
-        })
-
-        return res.status(200).json({sessionId:stripeCheckoutSession.id})
-    } else {
-        res.setHeader('Allow','POST') // Explicando pro Front que o método aceito é POST
-        res.status(405).end('Method not allowed'); 
-        
-    }
+    
+    return(
+        <button
+        type="button"
+        className={styles.subscribeButton}
+        onClick ={handleSubscribe}
+        >
+            Subscribe now
+        </button>
+    )
 }
 ```
 
-- Verificar se o método da requisição é do tipo POST.
-    - se não for POST
-        - res.setHeader('Allow','POST')
-        - res.status(405).end('method not allowed)'
-    - **se for POST**
-        - Criar sessão do stripe.
-            - Escolher metódo de pagamento.
-            - Selecionar se endereço é obrigatório ou não.
-            - Selecionar os itens
-                - preço
-                - quantidade
-            - modo
-            - Permitir cupons de desconto
-            - url de sucesso
-            - url se cancelar
-        - Informação do comprador
-            - Vai ser preciso criar um customer dentro do stripe.
-
-        ## Obtendo informações do usuário
-
-        - Pegar dos cookies.
-        - importar getSession do next-auth
-
-        ```tsx
-        const session = await getSessoin({ req }) 
-        ```
-
-        - Cadastrar no stripe
-
-        ```tsx
-        const stripeCustomer = await stripe.customers.create({
-        	email: session.user.email,
-        // metadata
-        })
-        ```
-
-    - Passar as informações para a função Checkout
-- retornar res.status(200).json(sessionId: stripeCheckoutSessionId)
+- Mostrar mensagem de erro caso não funcione.
