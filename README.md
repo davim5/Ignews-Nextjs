@@ -1,101 +1,120 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 15 - Salvando usuários no BD
+# 16 - Gerando Sessão de Checkout
+# Checkout session
 
-# Callbacks no Nextauth
+- Uma url que redireciona usuário
+- Ele preencher informações de pagamento
+- É redirecionado de volta.
 
-- São funções executadas de forma automática assim que acontece alguma ação.
-    - Exemplo: Sempre que usuário faz login na aplicação, é executada uma função signIn
+# Criar função handleSubscribe
 
-# Salvar os dados no banco de dados.
+- Saber se o usuário está logado
+    - useSession()
+    - Se ele não existir session, redirecionar para autenticação com github
+    - retornar
+- Se ele está logado
+- **Criação de checkout session**
 
-- importar o fauna no nextauth.
-- Escrever um query
-    - importar Query as q do faunadb
+    [https://stripe.com/docs/api/checkout/sessions](https://stripe.com/docs/api/checkout/sessions)
 
-## Inserção no banco de dados
-
-q.Create → método para fazer inserção
-
-- parâmetros → nome da collection que vamos inserir
-- Objeto com o data → Dados que vamos inserir.
-
-[https://docs.fauna.com/fauna/current/api/fql/cheat_sheet](https://docs.fauna.com/fauna/current/api/fql/cheat_sheet)
-
-- retornar true caso o login dê certo
+- Executar a função do stripe.
+- Não vai funcionar no componente do botão pois,
+    - Não teria como ter acesso à Key privada
 
 ```tsx
-callbacks: {
-    async signIn(user, account, profile) {
-      const { email } = user;
-
-      await fauna.query(
-        q.Create(
-          q.Collection('users'),
-          { data: { email }}
-        )
-      )
-
-      return true
+function handleSubscribe(){
+        if (!session){
+            signIn('github');
+            return;
+        }
     }
-  },
 ```
 
-- Quando fizermos o login, será criado um Document dentro da collection users
-- Vai criar um timeStamp (ts)
-- e ref → como se fosse um id.
+- Há 3 opções viáveis
+    - getStaticProps (SSG) → Só utilizado quando página é renderizada.
+    - getServerSideProps (SSR)  → Só utilizado quando página é renderizada.
+    - **API routes**
+- Na pasta auth
+- criar arquivo subscribe.ts
 
-# Detalhe
+# Função de Checkout
 
-- Como estamos fazendo uma inserção no banco de dados toda vez que o usuário loga, se o usuário já existe ele vai tentar criar de novo.
-
-# Verificação se usuário já existe
-
-- Se existir
-    - Ou fazer nada
-    - Ou atualizar o document já existente.
-- Usar um try catch
-- Verificação com o FaunaDB
-- Encontrar o usuário pelo índice
-    - Se não encontrar, cria novo usuário
-    - Se encontrar, não cria, só retorna os dados
+- exportar função assícrona
 
 ```tsx
-callbacks: {
-    async signIn(user, account, profile) {
-      const { email } = user;
-      
-      console.log(user)
+import { NextApiRequest, NextApiResponse } from "next";
+import { getSession } from "next-auth/client";
+import { env } from "process";
+import { stripe } from "../../services/stripe";
 
-      try{
-        await fauna.query(
-          q.If(
-            q.Not(
-              q.Exists(
-                q.Match(
-                  q.Index('user_by_email'),
-                  q.Casefold(user.email)
-                )
-              )
-            ),q.Create(
-              q.Collection('users'),
-              { data: { email }}
-            ),
-            q.Get(
-              q.Match(
-                q.Index('user_by_email'),
-                q.Casefold(user.email)
-              )
-            ) 
-          )
-        )
-        return true;
-      } catch{
-        return false;
-      }
+export default async (req:NextApiRequest, res:NextApiResponse) => {
+    // Checar se é POST
+    if(req.method === 'POST'){
+        const session = await getSession({ req });
 
+        const stripeCustomer = await stripe.customers.create({
+            email: session.user.email,
+            // metadata
+        })
+
+        const stripeCheckoutSession = await stripe.checkout.sessions.create({ 
+            customer: stripeCustomer.id,
+            payment_method_types: ['card'],
+            billing_address_collection: 'required',
+            line_items: [
+                { price: 'price_1IqVj5GFhz5DUpN4Nt2aLZPB', quantity:1}
+            ],
+            mode:'subscription',
+            allow_promotion_codes: true,
+            success_url: process.env.STRIPE_SUCESS_URL,
+            cancel_url: process.env.STRIPE_CANCEL_URL
+        })
+
+        return res.status(200).json({sessionId:stripeCheckoutSession.id})
+    } else {
+        res.setHeader('Allow','POST') // Explicando pro Front que o método aceito é POST
+        res.status(405).end('Method not allowed'); 
+        
     }
-  },
+}
 ```
 
-- Assim, os usuários já criados são reaproveitados
+- Verificar se o método da requisição é do tipo POST.
+    - se não for POST
+        - res.setHeader('Allow','POST')
+        - res.status(405).end('method not allowed)'
+    - **se for POST**
+        - Criar sessão do stripe.
+            - Escolher metódo de pagamento.
+            - Selecionar se endereço é obrigatório ou não.
+            - Selecionar os itens
+                - preço
+                - quantidade
+            - modo
+            - Permitir cupons de desconto
+            - url de sucesso
+            - url se cancelar
+        - Informação do comprador
+            - Vai ser preciso criar um customer dentro do stripe.
+
+        ## Obtendo informações do usuário
+
+        - Pegar dos cookies.
+        - importar getSession do next-auth
+
+        ```tsx
+        const session = await getSessoin({ req }) 
+        ```
+
+        - Cadastrar no stripe
+
+        ```tsx
+        const stripeCustomer = await stripe.customers.create({
+        	email: session.user.email,
+        // metadata
+        })
+        ```
+
+    - Passar as informações para a função Checkout
+- retornar res.status(200).json(sessionId: stripeCheckoutSessionId)
