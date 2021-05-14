@@ -1,94 +1,109 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 17 - Redirecionando para o Stripe
+# 18 - Evitando duplicação no Stripe
 
-- Chamar a requisição
+- Atualmente estamos criando o costumer da subscription, mas não devemos criar mais de um costumer com o mesmo email.
+- Utilizar banco de dados do FaunaDB
+- Quando criar o usuário, salvar o id do stripe junto com as informações no FaunaDB.
+- Quando for cair na rota Subscribe, verificar se ele já tem **id** do customer stripe inserido
+    - Se sim, só reaproveitar
+    - Se não, só criar
 
-# Instalar axios
+- Salvar o usuário criado no stripeCustomer criado numa variável
 
-- Criar api.ts na services
-- importar
-- baseURL: /api
+# Buscando o usuário
+
+- Buscar o usuário que precisamos atualizar.
+- Não é possível atualizar o usuário pelo índice diretamente.
+    - q.Get → faz um SELECT
+        - q.Match → que seja igual
+            - q.Index → Procurar o usuário pelo email
+            - que o email seja igual ao da session logada.
 
 ```tsx
-import axios from 'axios';
-
-export const api = axios.create({
-    baseURL:'/api',
-})
+const user = await fauna.query<User>(
+            q.Get(
+                q.Match(
+                    q.Index('user_by_email'),
+                    q.Casefold(session.user.email)
+                )
+            )
+        )
 ```
 
-# Chamar rota
+# Atualizando o Usuário no FaunaDB
 
-- No handleSubscribe
-    - api.post('/subscribe')
-        - subscribe pois o nome da rota é sempre o nome da pasta.
-    - da resposta, pegar o sessionId
-- Redirecionar usuário
-    - stripe tem duas sdks
-        - Uma pra backend
-        - Outra pro frontend
-    - outro service : stripe.js.ts
-    - instalar outra biblioteca
-        - @stripe/stripe-js
-    - importar loadString de
-    - exportar função assíncrona getStripeJs()
-        - Passara chave pública do stripe
-            - Em developers > API keys
-        - Criar variável ambiente com NEXT_PUBLIC.
-            - É a única forma de uma variável ambiente ser acessada pelo front-end.
-
-        ```tsx
-        import { loadStripe } from '@stripe/stripe-js';
-
-        export async function getStripeJs(){
-            const stripeJs = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY)
-            return stripeJs
-        }
-        ```
+- Atualizar um usuário
+- q.Update → Atualizar
+    - q.Ref → o usário dessa collection que tenham essa Ref.
+    - Passar os dados que queremos atualizar.
+        - nome do dado: valor do dado.
 
 ```tsx
-import { session, signIn } from 'next-auth/client';
-import { useEffect } from 'react';
-import { api } from '../../services/api';
-import { getStripeJs } from '../../services/stripe.js';
-import styles from './styles.module.scss';
+await fauna.query(
+                q.Update(
+                    q.Ref(q.Collection('users'), user.ref.id),{
+                        data: {
+                            stripe_customer_id: stripeCustomer.id,
+                        }
+                    }
+                )
+            ) 
+```
 
-interface SubscribeButtonProps{
-    priceId:string;
-}
+- Assim, agora o usuário tem o id do stripe junto com seus dados no FaunaDB.
 
-export function SubscribeButton({priceId}:SubscribeButtonProps){
-    
-    async function handleSubscribe(){
-        if (!session){
-            signIn('github');
-            return;
-        }
+![https://s3-us-west-2.amazonaws.com/secure.notion-static.com/77cb40ab-caa3-4276-a4ba-bab5b7e8cd00/Untitled.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/77cb40ab-caa3-4276-a4ba-bab5b7e8cd00/Untitled.png)
 
-        try{
-            const response = await api.post('/subscribe');
+## Criando o Tipo User pra não da Erro.
 
-            const { sessionId  } = response.data;
-
-            const stripe = await getStripeJs();
-
-            await stripe.redirectToCheckout({ sessionId })
-        }catch(err){
-            alert(err.message);
-        }
+```tsx
+type User = {
+    ref: {
+        id:string;
     }
-    
-    return(
-        <button
-        type="button"
-        className={styles.subscribeButton}
-        onClick ={handleSubscribe}
-        >
-            Subscribe now
-        </button>
-    )
+    data:{
+        stripe_customer_id:string;
+    }
 }
 ```
 
-- Mostrar mensagem de erro caso não funcione.
+# Verificação
+
+- Verificar se o usuário já tem o stripe_customer_id
+- Armazenar a stripe_customer_id do usuário em uma variável **customerId.**
+
+```tsx
+let customerId = user.data.stripe_customer_id;
+```
+
+- Se **customerId** não existir
+    - Criar o novo customer
+    - Armazenar o id criado no **customerId**
+
+```tsx
+if(!customerId){
+            const stripeCustomer = await stripe.customers.create({
+                email: session.user.email,
+                // metadata
+            })
+    
+            await fauna.query(
+                q.Update(
+                    q.Ref(q.Collection('users'), user.ref.id),{
+                        data: {
+                            stripe_customer_id: stripeCustomer.id,
+                        }
+                    }
+                )
+            )
+
+            customerId = stripeCustomer.id;
+        }
+```
+
+- Passar o customerId na criação da sessão.
+
+```tsx
+customer: customerId,
+```
