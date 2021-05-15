@@ -1,70 +1,120 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 19 - Webhooks do Stripe
+# 20 - Ouvindo eventos do Stripe
 
-- É uma pattern utilizado para integração entre sistemas na web,
-- **Quando vamos integrar na ferramenta de terceiros, como o stripe, as ferramentas usam o conceito de Webhook para conseguir avisar a aplicação de que aconteceu alguma coisa com a aplicação terceira.**
+- Receber os eventos e  conseguir "Parsear" esses eventos e pegar os dados dentro deles..
+- O Stripe, quando envia os webhooks, utiliza um dado de streaming
+    - É como se quando fizessa a requisição para nossa API, eles não estivessem prontos todos de uma vez.
+    - É recebido aos poucos
+    - Precisamos fazer um código para transformar a resposta do Stripe em algo que seja legível dentro do JS.
+- Não é um código pra decorar, é um código específico do Node para streaming.
+- Só usar e pronto.
 
-### Exemplo:
-
-- Usuário faz a inscrição
-- Usuária cria customer e subscription
-- Após o mês o cartão do usuário está sem fundo e não faz o pagamento.
-- Como a aplicação fica sabendo que o cartão não passou?
-- Deveria ter uma for do stripe avisar a aplicação que o cartão não passou.
-- É assim que funciona, quando uma aplicação terceira avisa à nossa aplicação o que algo aconteceu.
-
-## Como?
-
-- Normalmente é por uma **rota HTTP.**
-- Damos uma rota para o stripe, para que toda vez que algo acontece ele vai mandar para essa rota.
-
-# No Stripe
-
-- Em settings
-- configure webhooks
-- Se a aplicação já estiver online, cadastramos um endpoint.
-    - Enquanto não está online, não há como colocar o localhost:3000, por exemplo.
-
-# CLI do Stripe
-
-- Como a aplicação não está online
-- Linha de comando
-- Fica observando/ouvindo os webhooks do stripe e encaminhando para o localhost
-
-## Instalar CLI
-
-- Dar o login
-
-# Começar a ouvir os webhooks
-
-## Criar arquivo webhooks.ts
-
-- Na pasta page/api
+# Converter Stream para String
 
 ```tsx
-import { NextApiRequest, NextApiResponse } from "next";
+async function buffer(readable:Readable) {
+    const chunks = [];
 
-export default (req: NextApiRequest, res: NextApiResponse) =>{
-    console.log('evento recebido');
-
-    res.status(200).json({ ok:true })
+    for await(const chunk of readable){
+        chunks.push(
+            typeof chunk === "string" ? Buffer.from(chunk) : chunk
+        );
+    }
+    
+    return Buffer.concat(chunks);
 }
 ```
 
-- Executar no terminal
-- stripe list foward-to [localhost:3000/rota](http://localhost:3000/rotaque)dapasta
+- Next tem um formato de entender requisição
+- Nessa caso ele vem como Stream
+- Precisamos desabilitar o entendimento padrão o Next de como receber requisição
 
-```bash
-stripe listen --forward-to localhost:3000/api/webhooks
+```tsx
+export const config = {
+    api: {
+        bodyParser: false
+    }
+}
 ```
 
-## Testando
+# Função
 
-- Executando, ir na aplicação e finalizar uma compra
+- Verificar se o método é POST
+- Receber o código secreto que garante que somos nós que estamos fazendo a requisição
 
-    ### Obs: Pra testar a compra com cartão no Stripe , podemos usar um cartão fictício → 4242 4242 4242 4242
+```tsx
+export default async (req: NextApiRequest, res: NextApiResponse) =>{
+    // Verificar se o método é POST
+    if(req.method === 'POST') {
+        const buf = await buffer(req)
+        // Receber um código secreto que garante que somos nós que estamos fazendo
+        // a requisição.
+        const secret = req.headers['stripe-signature'];
 
-- Ele vai disparar vários webhooks
+        // Forma que stripe recomenda (não deve ser com if tradicional)
+        
+        let event: Stripe.Event
 
-- Agora vamos organizar esses dados obtidos para usar.
+        try {
+            event = stripe.webhooks.constructEvent(buf, secret,process.env.STRIPE_WEBHOOK_SECRET);
+        } catch (err) {
+            return res.status(400).send(`Webhook error: ${err.message}`)
+        }
+
+        const { type } = event;
+
+        if(relevantEvents.has(type)) {
+            console.log('Evento recebido', event)
+        }
+
+        res.status(200).json({ ok:true })
+    } else{
+        res.setHeader('Allow', 'POST')
+        res.status(405).end('Method not allowed')
+    }
+
+}
+```
+
+- Cria uma variável de event do Stripe
+- Recebe o event, se bater a key
+
+```tsx
+let event: Stripe.Event
+
+try {
+    event = stripe.webhooks.constructEvent(buf, secret,process.env.STRIPE_WEBHOOK_SECRET);
+} catch (err) {
+    return res.status(400).send(`Webhook error: ${err.message}`)
+}
+
+const { type } = event;
+```
+
+- O event nos dá acesso á varias informações
+- Vamos usá-lo pra determinar o que fazer
+    - **event.type →** retorna exatamente o que vemos no terminal
+    - Baseado nesse type decidimos se queremos fazer algo ou não
+
+## Selecionando os eventos
+
+- Set → Array que não pode ter nada duplicado dentro.
+- Criar um array que os tipos de eventos que são relevantes para a aplicação.
+
+```tsx
+const relevantEvents = new Set([
+    'checkout.session.completed'
+])
+```
+
+## Colhendo o evento
+
+- Se o evento for do tipo que "achamos" relevante.
+- console.log
+
+```tsx
+if(relevantEvents.has(type)) {
+        console.log('Evento recebido', event)
+    }
+```
