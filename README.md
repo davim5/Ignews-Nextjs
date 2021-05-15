@@ -1,120 +1,109 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 20 - Ouvindo eventos do Stripe
+# 21 - Salvando dados do evento
 
-- Receber os eventos e  conseguir "Parsear" esses eventos e pegar os dados dentro deles..
-- O Stripe, quando envia os webhooks, utiliza um dado de streaming
-    - É como se quando fizessa a requisição para nossa API, eles não estivessem prontos todos de uma vez.
-    - É recebido aos poucos
-    - Precisamos fazer um código para transformar a resposta do Stripe em algo que seja legível dentro do JS.
-- Não é um código pra decorar, é um código específico do Node para streaming.
-- Só usar e pronto.
-
-# Converter Stream para String
-
-```tsx
-async function buffer(readable:Readable) {
-    const chunks = [];
-
-    for await(const chunk of readable){
-        chunks.push(
-            typeof chunk === "string" ? Buffer.from(chunk) : chunk
-        );
-    }
-    
-    return Buffer.concat(chunks);
-}
-```
-
-- Next tem um formato de entender requisição
-- Nessa caso ele vem como Stream
-- Precisamos desabilitar o entendimento padrão o Next de como receber requisição
-
-```tsx
-export const config = {
-    api: {
-        bodyParser: false
-    }
-}
-```
-
-# Função
-
-- Verificar se o método é POST
-- Receber o código secreto que garante que somos nós que estamos fazendo a requisição
-
-```tsx
-export default async (req: NextApiRequest, res: NextApiResponse) =>{
-    // Verificar se o método é POST
-    if(req.method === 'POST') {
-        const buf = await buffer(req)
-        // Receber um código secreto que garante que somos nós que estamos fazendo
-        // a requisição.
-        const secret = req.headers['stripe-signature'];
-
-        // Forma que stripe recomenda (não deve ser com if tradicional)
-        
-        let event: Stripe.Event
-
-        try {
-            event = stripe.webhooks.constructEvent(buf, secret,process.env.STRIPE_WEBHOOK_SECRET);
-        } catch (err) {
-            return res.status(400).send(`Webhook error: ${err.message}`)
-        }
-
-        const { type } = event;
-
-        if(relevantEvents.has(type)) {
-            console.log('Evento recebido', event)
-        }
-
-        res.status(200).json({ ok:true })
-    } else{
-        res.setHeader('Allow', 'POST')
-        res.status(405).end('Method not allowed')
-    }
-
-}
-```
-
-- Cria uma variável de event do Stripe
-- Recebe o event, se bater a key
-
-```tsx
-let event: Stripe.Event
-
-try {
-    event = stripe.webhooks.constructEvent(buf, secret,process.env.STRIPE_WEBHOOK_SECRET);
-} catch (err) {
-    return res.status(400).send(`Webhook error: ${err.message}`)
-}
-
-const { type } = event;
-```
-
-- O event nos dá acesso á varias informações
-- Vamos usá-lo pra determinar o que fazer
-    - **event.type →** retorna exatamente o que vemos no terminal
-    - Baseado nesse type decidimos se queremos fazer algo ou não
-
-## Selecionando os eventos
-
-- Set → Array que não pode ter nada duplicado dentro.
-- Criar um array que os tipos de eventos que são relevantes para a aplicação.
-
-```tsx
-const relevantEvents = new Set([
-    'checkout.session.completed'
-])
-```
-
-## Colhendo o evento
-
-- Se o evento for do tipo que "achamos" relevante.
-- console.log
+- Colocar um switch no type do evento
+- Pra cada tipo de evento, dar um resposta diferente
+- Se o tipo não for contemplado jogar um throw error
+- Pôr um try catch
 
 ```tsx
 if(relevantEvents.has(type)) {
-        console.log('Evento recebido', event)
+    try{
+        switch(type){
+            case 'checkout.session.completed':
+                break;
+            default:
+                throw new Error('Unhandled event.')
+        }
+    } catch(err) {
+        return res.json({error:'Webhook handler failed.'})
     }
+}
+```
+
+# No FaunaDB
+
+- Criar um índice para buscar o usuário pela costumer id → user_by_stripe_costumer_id
+- Criar nova collection que vai salvar as inscrições do usuário → subsriptions
+
+# Pasta _lib
+
+- Dentro da pasta api
+    - O '_' é para que essa pasta não seja interpretada como rota.
+        - Todo arquivo dentro da pasta api se torna um api root.
+- Nela criar arquivo manageSubscription.ts
+- Criar e exportar uma função assíncrona **saveSubscription**
+    - Vai receber com parâmetros a a subscriptionId e a costumerId.
+
+    ```tsx
+    export async function saveSubscription(
+        subscriptionId: string,
+        customerId:string,
+    ){}
+    ```
+
+- Dentro do switch do type checkout.session.completed
+    - executar a função de saveSubscription passando os parâmetros.toString()
+
+```tsx
+const checkoutSession = event.data.object as Stripe.Checkout.Session
+
+  await saveSubscription(
+      checkoutSession.subscription.toString(),
+      checkoutSession.customer.toString()
+  )
+```
+
+## Buscar usuário
+
+- Buscar usuário no FaunaDB com o customer_id.
+- Select → pegar apenas o dado passado "ref"
+    - De todos que tiver o customer_id igual ao passado na função como parâmetro
+
+```tsx
+const userRef = await fauna.query( // Pegando referência do usuário
+    q.Select(
+        "ref",
+        q.Get(
+            q.Match(
+                q.Index('user_by_stripe_customer_id'),
+                customerId
+            )
+        )
+    )
+)
+```
+
+## Buscar todos os dados da subscription
+
+- Armazenar na variável subscription
+    - Os dados que tiverem da subscription com o mesmo id passado na função como parâmetro.
+
+```tsx
+const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+```
+
+### Separando os dados mais importantes (que vão ser usados)
+
+- Criar uma variável subscriptionData
+
+```tsx
+const subscriptionData = {
+        id: subscription.id,
+        userId: userRef,
+        status: subscription.status,
+        price_id: subscription.items.data[0].price.id,
+    }
+```
+
+# Salvar os dados no Fauna DB
+
+```tsx
+await fauna.query(
+        q.Create(
+            q.Collection('subscriptions'),
+            { data:subscriptionData }
+        )
+    )
 ```
