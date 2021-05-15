@@ -1,177 +1,93 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 25 - Consumindo API do Prismic
+# 26 - Listando Posts em Tela
 
-# Formas
+- Pegar todos os posts do prismic e listar em tela
 
-## API em Rest
+# Formatação de dados
 
-- O que estamos acostumados
+- Quando buscamos dados de uma API, terceiro é comum os dados não virem no formato que precisamos
+    - Principalmente quando lidamos com dadas, valores monetarios, o retorno do prismic
+- Fica comum deixar pra formatar esses valores na interface.
+    - Fazer formatação dentro do HTML.
+    - Essa data vai ser formatada no frontend toda vez que a página for acessada.
+    - **Se formatar essa data no momento em que faço chamada da API, antes de passar isso pra visualização, isso só vai ser feito uma vez**
+- **Sempre faça a formatação dos dados logo após consumir os dados da API.**
+    - Vai  garantir mais processamento, pois não será preciso formatar os valores em tempo de execução na tela.
 
-## GraphQL
+# Formatando
 
-## Com as tecnologias mais comuns
+- Criar um objeto posts
+    - Percorrer os resultados
+    - retornar um objeto com os dados já formatados.
 
-- JavaScript
-- React
-- Next (em beta)
+## Instalar Prismic-dom
 
-- No caso vamos usar de React/Javascript
+- Converte os formatos do prismic para HTML ou texto
 
-# Criar service
-
-- Cada service é uma forma de contatar alguma coleta de dados, cada services é uma integração com algum serviço
-- Criar em services um prismic.ts
-
-### Instalar
-
-- Cliente do prismic pra integrar com JS
-
-```tsx
-yarn add @prismicio/client
+```bash
+yarn add prismic-dom
+yarn add @types/prismic-dom
 ```
 
-- Importar prismic de
-- Instanciar client do prismic. (documentação)
-    - Criar client do prismic passando a access token
-    - Passar também um objeto com a access token.
-- Passar o req como parâmetro do tipo uknown.
+- Importar  RichText da prismic-dom
+    - Conversor do formato do prismic para texto ou html
 
-```tsx
-import Prismic from '@prismicio/client';
-
-export function getPrismicClient(req?: unknown){
-  const prismic = Prismic.client(
-      process.env.PRISMIC_ENDPOINT,
-      {
-          req,
-          accessToken: process.env.PRISMIC_ACCESS_TOKEN
-      }
-  )
-}
+```bash
+const posts = response.results.map(post=> {
+        return {
+            slug: post.uid, // URL 
+            title: RichText.asText(post.data.title),
+            excerpt: post.data.content.find(content => content.type === 'paragraph')?.text ?? '',
+            updatedAt: new Date(post.last_publication_date).toLocaleDateString('pt-BR',{
+                day: '2-digit',
+                month: 'long',
+                year: '2-digit' 
+            }),
+        };
+    });
 ```
 
-# Carregar listagem de posts
+- Pegar o primeiro paragrafo de texto do post
+    - Se o post não começar com o texto, descartar
+- Pegar conteúdo o post
+    - dar um find
+        - Encontrar se o conteúdo do texto é do tipo='paragraph'
+            - Precorrer o array até encontrar o primeiro que o tipo seja paragraph
+                - Se encontrar
+                    - Pegar texto
+                - Se não
+                    - retornar ' '
 
-- Na página posts
-- A página vai ser estática
-    - Não teremos posts a cada minuto
-    - Pode atualizar uma vez a cada 1 hora por exemplo.
-- Usar api do prismic → getPrismicCliente()
-- Fazer um query para buscar os dados do client.
-    1. A api de fazer where do prismic é o *predicates*
-        - documentos que o tipo for post
+```bash
+excerpt: post.data.content.find(content => content.type === 'paragraph')?.text ?? '',
+```
 
-    2. Fetch → quais dados quero buscar da publicação,
+- retornar os props
 
-    - pageSize: quantos posts quero trazer
-        - Prismic sempre usa paginação, é sempre bom ter algum tipo.
-
-- retornar props
-
-```tsx
-export const getStaticProps: GetStaticProps = async () => {
-    const prismic = getPrismicClient()
-
-    // Buscar os conteudos
-    const response = await prismic.query([
-        Prismic.predicates.at('document.type','post')
-    ],{
-        fetch: ['post.title','post.content'],
-        pageSize: 100,
-    })
-
-    console.log(response)
-
-    return {
-        props:{}
+```bash
+return {
+        props: {
+            posts
+        }
     }
-}
 ```
 
-# Formas
+# Declarar formato das props
 
-## API em Rest
+- Por ser array, é bom separa o tipo num type separado e falar que é um array desse tipo.
 
-- O que estamos acostumados
+```bash
+type Post = {
+    slug: string;
+    title: string;
+    excerpt: string;
+    updatedAt: string;
+};
 
-## GraphQL
-
-## Com as tecnologias mais comuns
-
-- JavaScript
-- React
-- Next (em beta)
-
-- No caso vamos usar de React/Javascript
-
-# Criar service
-
-- Cada service é uma forma de contatar alguma coleta de dados, cada services é uma integração com algum serviço
-- Criar em services um prismic.ts
-
-### Instalar
-
-- Cliente do prismic pra integrar com JS
-
-```tsx
-yarn add @prismicio/client
-```
-
-- Importar prismic de
-- Instanciar client do prismic. (documentação)
-    - Criar client do prismic passando a access token
-    - Passar também um objeto com a access token.
-- Passar o req como parâmetro do tipo uknown.
-
-```tsx
-import Prismic from '@prismicio/client';
-
-export function getPrismicClient(req?: unknown){
-  const prismic = Prismic.client(
-      process.env.PRISMIC_ENDPOINT,
-      {
-          req,
-          accessToken: process.env.PRISMIC_ACCESS_TOKEN
-      }
-  )
+interface PostProps {
+    posts: Post[];
 }
-```
 
-# Carregar listagem de posts
-
-- Na página posts
-- A página vai ser estática
-    - Não teremos posts a cada minuto
-    - Pode atualizar uma vez a cada 1 hora por exemplo.
-- Usar api do prismic → getPrismicCliente()
-- Fazer um query para buscar os dados do client.
-    1. A api de fazer where do prismic é o *predicates*
-        - documentos que o tipo for post
-
-    2. Fetch → quais dados quero buscar da publicação,
-
-    - pageSize: quantos posts quero trazer
-        - Prismic sempre usa paginação, é sempre bom ter algum tipo.
-
-- retornar props
-
-```tsx
-export const getStaticProps: GetStaticProps = async () => {
-    const prismic = getPrismicClient()
-
-    // Buscar os conteudos
-    const response = await prismic.query([
-        Prismic.predicates.at('document.type','post')
-    ],{
-        fetch: ['post.title','post.content'],
-        pageSize: 100,
-    })
-
-    console.log(response)
-
-    return {
-        props:{}
-    }
-}
+export default function Posts({ posts }:PostProps){
 ```

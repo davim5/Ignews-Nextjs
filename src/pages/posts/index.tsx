@@ -3,8 +3,21 @@ import Head from 'next/head';
 import { getPrismicClient } from '../../services/prismic';
 import styles from './styles.module.scss';
 import Prismic from '@prismicio/client';
+import { RichText } from 'prismic-dom';
 
-export default function Posts(){
+type Post = {
+    slug: string;
+    title: string;
+    excerpt: string;
+    updatedAt: string;
+};
+
+interface PostProps {
+    posts: Post[];
+}
+
+
+export default function Posts({ posts }:PostProps){
     return(
         <>
             <Head>
@@ -12,21 +25,13 @@ export default function Posts(){
             </Head>
             <main className={styles.container}>
                 <div className={styles.posts}>
-                    <a href="#">
-                        <time>15 maio de 2021</time>
-                        <strong>Título do post</strong>
-                        <p>Breve paragrafo do post bem grande pra dar uma ocupada na tela.</p>
-                    </a>
-                    <a href="#">
-                        <time>15 maio de 2021</time>
-                        <strong>Título do post</strong>
-                        <p>Breve paragrafo do post bem grande pra dar uma ocupada na tela.</p>
-                    </a>
-                    <a href="#">
-                        <time>15 maio de 2021</time>
-                        <strong>Título do post</strong>
-                        <p>Breve paragrafo do post bem grande pra dar uma ocupada na tela.</p>
-                    </a>
+                    { posts.map(post => (
+                        <a key={post.slug} href="#">
+                            <time>{post.updatedAt}</time>
+                            <strong>{post.title}</strong>
+                            <p>{post.excerpt}</p>
+                        </a>
+                    ))}
                 </div>
             </main>
         </>
@@ -44,9 +49,22 @@ export const getStaticProps: GetStaticProps = async () => {
         pageSize: 100,
     })
 
-    console.log(response)
+    const posts = response.results.map(post=> {
+        return {
+            slug: post.uid, // URL 
+            title: RichText.asText(post.data.title),
+            excerpt: post.data.content.find(content => content.type === 'paragraph')?.text ?? '',
+            updatedAt: new Date(post.last_publication_date).toLocaleDateString('pt-BR',{
+                day: '2-digit',
+                month: 'long',
+                year: '2-digit' 
+            }),
+        };
+    });
 
     return {
-        props:{}
+        props: {
+            posts
+        }
     }
 }
