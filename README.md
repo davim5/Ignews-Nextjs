@@ -1,109 +1,70 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 18 - Evitando duplicação no Stripe
+# 19 - Webhooks do Stripe
 
-- Atualmente estamos criando o costumer da subscription, mas não devemos criar mais de um costumer com o mesmo email.
-- Utilizar banco de dados do FaunaDB
-- Quando criar o usuário, salvar o id do stripe junto com as informações no FaunaDB.
-- Quando for cair na rota Subscribe, verificar se ele já tem **id** do customer stripe inserido
-    - Se sim, só reaproveitar
-    - Se não, só criar
+- É uma pattern utilizado para integração entre sistemas na web,
+- **Quando vamos integrar na ferramenta de terceiros, como o stripe, as ferramentas usam o conceito de Webhook para conseguir avisar a aplicação de que aconteceu alguma coisa com a aplicação terceira.**
 
-- Salvar o usuário criado no stripeCustomer criado numa variável
+### Exemplo:
 
-# Buscando o usuário
+- Usuário faz a inscrição
+- Usuária cria customer e subscription
+- Após o mês o cartão do usuário está sem fundo e não faz o pagamento.
+- Como a aplicação fica sabendo que o cartão não passou?
+- Deveria ter uma for do stripe avisar a aplicação que o cartão não passou.
+- É assim que funciona, quando uma aplicação terceira avisa à nossa aplicação o que algo aconteceu.
 
-- Buscar o usuário que precisamos atualizar.
-- Não é possível atualizar o usuário pelo índice diretamente.
-    - q.Get → faz um SELECT
-        - q.Match → que seja igual
-            - q.Index → Procurar o usuário pelo email
-            - que o email seja igual ao da session logada.
+## Como?
 
-```tsx
-const user = await fauna.query<User>(
-            q.Get(
-                q.Match(
-                    q.Index('user_by_email'),
-                    q.Casefold(session.user.email)
-                )
-            )
-        )
-```
+- Normalmente é por uma **rota HTTP.**
+- Damos uma rota para o stripe, para que toda vez que algo acontece ele vai mandar para essa rota.
 
-# Atualizando o Usuário no FaunaDB
+# No Stripe
 
-- Atualizar um usuário
-- q.Update → Atualizar
-    - q.Ref → o usário dessa collection que tenham essa Ref.
-    - Passar os dados que queremos atualizar.
-        - nome do dado: valor do dado.
+- Em settings
+- configure webhooks
+- Se a aplicação já estiver online, cadastramos um endpoint.
+    - Enquanto não está online, não há como colocar o localhost:3000, por exemplo.
 
-```tsx
-await fauna.query(
-                q.Update(
-                    q.Ref(q.Collection('users'), user.ref.id),{
-                        data: {
-                            stripe_customer_id: stripeCustomer.id,
-                        }
-                    }
-                )
-            ) 
-```
+# CLI do Stripe
 
-- Assim, agora o usuário tem o id do stripe junto com seus dados no FaunaDB.
+- Como a aplicação não está online
+- Linha de comando
+- Fica observando/ouvindo os webhooks do stripe e encaminhando para o localhost
 
-![https://s3-us-west-2.amazonaws.com/secure.notion-static.com/77cb40ab-caa3-4276-a4ba-bab5b7e8cd00/Untitled.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/77cb40ab-caa3-4276-a4ba-bab5b7e8cd00/Untitled.png)
+## Instalar CLI
 
-## Criando o Tipo User pra não da Erro.
+- Dar o login
+
+# Começar a ouvir os webhooks
+
+## Criar arquivo webhooks.ts
+
+- Na pasta page/api
 
 ```tsx
-type User = {
-    ref: {
-        id:string;
-    }
-    data:{
-        stripe_customer_id:string;
-    }
+import { NextApiRequest, NextApiResponse } from "next";
+
+export default (req: NextApiRequest, res: NextApiResponse) =>{
+    console.log('evento recebido');
+
+    res.status(200).json({ ok:true })
 }
 ```
 
-# Verificação
+- Executar no terminal
+- stripe list foward-to [localhost:3000/rota](http://localhost:3000/rotaque)dapasta
 
-- Verificar se o usuário já tem o stripe_customer_id
-- Armazenar a stripe_customer_id do usuário em uma variável **customerId.**
-
-```tsx
-let customerId = user.data.stripe_customer_id;
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks
 ```
 
-- Se **customerId** não existir
-    - Criar o novo customer
-    - Armazenar o id criado no **customerId**
+## Testando
 
-```tsx
-if(!customerId){
-            const stripeCustomer = await stripe.customers.create({
-                email: session.user.email,
-                // metadata
-            })
-    
-            await fauna.query(
-                q.Update(
-                    q.Ref(q.Collection('users'), user.ref.id),{
-                        data: {
-                            stripe_customer_id: stripeCustomer.id,
-                        }
-                    }
-                )
-            )
+- Executando, ir na aplicação e finalizar uma compra
 
-            customerId = stripeCustomer.id;
-        }
-```
+    ### Obs: Pra testar a compra com cartão no Stripe , podemos usar um cartão fictício → 4242 4242 4242 4242
 
-- Passar o customerId na criação da sessão.
+- Ele vai disparar vários webhooks
 
-```tsx
-customer: customerId,
-```
+- Agora vamos organizar esses dados obtidos para usar.
