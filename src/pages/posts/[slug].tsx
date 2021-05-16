@@ -1,3 +1,4 @@
+import { GetServerSideProps } from "next";
 import { getSession } from "next-auth/client"
 import { useRouter } from "next/dist/client/router";
 import Head from "next/head";
@@ -39,11 +40,11 @@ export default function Post ({post}:PostProps){
 // ùnica forma de garantir que o usuário
 // Dentro do assim, teremos acesso à requisição
     // Dentro dela saber se o usuário está logado ou não;
-export const getServerSideProps = async ({ req,params }) => {
+export const getServerSideProps: GetServerSideProps = async ({ req,params }) => {
     const session = await getSession({ req });
 
     // Redirecionando caso a inscrição do usuário não esteja ativa
-    if(!session.activeSubscription) {
+    if(!session?.activeSubscription) {
         return {
             redirect:{
                 destination:'/',
@@ -51,8 +52,6 @@ export const getServerSideProps = async ({ req,params }) => {
             }
         }
     }
-
-    
     // PRA CARREGAR O CONTEÚDO
     // Vamos precisar do slug
         // pegamos no parametro 'params'

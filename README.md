@@ -1,118 +1,80 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 30 - Validando Assinatura Ativa
+# 31 - Página preview do post
 
-- Validar se a assinatura do usuário está ativa para mostrar o conteúdo do post.
-- Precisamos passar no useSession se o usuário logado possui uma inscrição ativa ou não.
-    - Poderia usar o getStaticProps, mas se precisarmos dessa informação em outra páginas, vai tornar o processo trabalhoso.
+- Vai ser utilizada principalmente pelos mecanismos de busca para que os posts sejam indexados, mesmo que sejam apenas acessável por quem assina a aplicação.
+- Ver preview do post.
+- Dar opção de se inscrever
 
-# Modificando os dados dentro do Session
+# Criar
 
-- Novo callback no [...nextauth].
-- Passando a session
+- Pasta preview dentro da pasta posts
+- Copiar a [...slug] e utilizar a mesma estilização.
 
-## Encontrar a informação de se o usuário está com a inscrição ativa.
-
-- Pegar dados da inscrição pelo Id(ref) do usuário.
-- Comparar com o id(ref) do usuário logado.
-    - Buscar informação do usuário logado a partir do email passado na session.
-- Verificar se a inscrição está a ativa ou não.
-- **Se encontrar:**
-    - Retornar session com tudo que já tinha na session mais a nova variável que armazena o status.
-- **Se não encontrar:**
-    - Retornar session com tudo que já tinha na session mais a nova variável que armazena o status como **null.**
+### Código pra funcionar que vai ser explicado depois
 
 ```tsx
-callbacks: {
-    async session(session){
-
-      try {
-        const userActiveSubscription = await fauna.query(
-          q.Get(
-            q.Intersection([
-              q.Match(
-                q.Index('subscription_by_user_ref'),
-                q.Select(
-                  'ref',
-                  q.Get(
-                    q.Match(
-                      q.Index('user_by_email'),
-                      q.Casefold(session.user.email)
-                    )
-                  )
-                )
-              ),
-              q.Match(
-                q.Index('subscription_by_status'),
-                "active"
-              )
-               ])
-          )
-        )
-  
-        return {
-          ...session,
-          activeSubscription:userActiveSubscription
-        };
-      } catch {
-        return {
-          ...session,
-          activeSubscription: null
-        }
-      }
-    },
+export const getStaticPaths = () => {
+    return{
+        paths:[],
+        fallback:'blocking'
+    }
+}
 ```
 
-# Redirecionando o usuário
+# Removendo parte do post
 
-- Na pagina do post [...slug], se o usuário não for inscrito, redirecioná-lo para a Home.
+- Remover parte do post que não deve ser exibido
+- Fazer um splice no conteúdo do post
+    - Pegar os 3 primeiros blocos de conteúdo
 
 ```tsx
-// Redirecionando caso a inscrição do usuário não esteja ativa
-    if(!session.activeSubscription) {
-        return {
-            redirect:{
-                destination:'/',
-                permanent: false,
-            }
-        }
-    }
+const post = {
+        slug,
+        title: RichText.asText(response.data.title),
+        content: RichText.asHtml(response.data.content.splice(0,3)),
+        updatedAt: new Date(response.last_publication_date).toLocaleDateString('pt-BR',{
+            day: '2-digit',
+            month: 'long',
+            year: '2-digit' 
+        }),
 ```
 
-# Evitando que o usuário se inscreva mais de uma vez.
+## Fazedo degradê
 
-- Agora que a session também envia o status da inscrição do usuário.
-- Na função HandleSubscribe
-    - Verificar se o usuário logado já possui inscrição ativa ou não.
-    - Se tiver: mandar para a página posts.
-- 
+- Colocando outra classe na div do content.
 
 ```tsx
-export function SubscribeButton({priceId}:SubscribeButtonProps){
-    const [session] = useSession();
-    const router = useRouter();
+<div
+className={`${styles.postContent} ${styles.previewContent}`} 
+dangerouslySetInnerHTML={{__html: post.content}}/>
+```
 
-    async function handleSubscribe(){
-        if (!session){
-            signIn('github');
-            return;
-        }
+- Se o a classe postContent for também um previewContent, adicionar um linear gradient.
 
-        if(session.activeSubscription){
-            router.push('/posts');
-            return;
-        }
+```tsx
+&.previewContent{
+    background: linear-gradient(var(--gray-100),transparent);
+    background-clip: text;
+    -webkit-text-fill-color: transparent; // fazer gradiente no texto
+}
+```
 
-        try{
-            const response = await api.post('/subscribe');
+# Verificar se o usuário está logado e redirecionar.
 
-            const { sessionId  } = response.data;
+- Se a pessoa está logada e tem uma inscrição ativa, é melhor ela não ver o preview do post, mas o post original completo.
+- Como isso é estático, não há como fazer uma verificação.
+- A única forma de saber se o usuário está logado é por dentro do proprio componente PostPreview.
+- useSession
+- useEffect se a session mudar.
+    - Não deixar o array vazio.
+    - Ele funcionaria com array vazio, mas assim ele só vai executar a verificação no momento em que a página for carregada.
+    - Se o useEffect for de acordo com o session, se o usuário logar na hora, ele já vai ser redirecionado para a página com conteúdo completo.
 
-            const stripe = await getStripeJs();
-
-            await stripe.redirectToCheckout({ sessionId })
-        }catch(err){
-            alert(err.message);
-        }
+```tsx
+useEffect(() => {
+    if(session?.activeSubscription) {
+        router.push(`/posts/${post.slug}`)
     }
+},[session]);
 ```
