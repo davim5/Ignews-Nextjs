@@ -1,145 +1,108 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 28 - Componente: ActiveLink
+# 29 - Página: Post
 
-- Manter o Link do menu selecionado na página aberta
-- Dentro do next temos o **useRouter()**
-    - Retorna algumas informações que podemos utilizar
-        - **asPath.**
-            - Mostar exatamente a rota que está sendo acessado
-            - Na home mostra apenas "/".
-- Então poderíamos passar uma comparação dentro da className de quando cada um dos links está ativo ou não.
+- Dentro da API roots, quando a página é dinâmica ela não vai ser de um post, mas de todos os posts.
+- Preciso saber qual post quero mostrar, baseado no id por exemplo.
 
-```bash
-import { SignInButton } from '../SignInButton';
-import styles from './styles.module.scss';
-import Link from 'next/link';
+# Como
 
-export function Header(){
-	const { asPath } = useRouter();
-	
-    return(
-        <header className={styles.headerContainer}>
-            <div className={styles.headerContent}>
-                <img src="/images/logo.svg" alt="ig.news" />
-                <nav>
-                    <Link href="/">
-                    <a className={asPath === '/' ? styles.active : '' } >Home</a>
-                    </Link>
-                    <Link href="/posts" prefetch>
-                    <a className={asPath === '/posts' ? styles.active : '' } >Posts</a>
-                    </Link>
-                </nav>
-                <SignInButton/>
-            </div>
-        </header>
-    )
-}
-```
+- Criar arquivo
+- Usar colchete pro nome do parâmetro
 
-# Problema
+# Para acessar o conteúdo do post, precisa de uma assinatura.
 
-- Se for preciso fazer isso toda vez que tiver um link na aplicação fica trabalhoso
+- Se for gerada de forma estática, a página não será protegida.
 
-# Criar componente ActiveLink
+## Usando ServerSideProps
 
-- Não tem estilização
-    - Só um link do next sendo que com a possibilidade de ter essa classe Active ou não.
-- Retornar o Link do proprio Next
-- Receber props
-- Criar interface ActiveLinkProps
-    - children → Vai ser um ReactElement
-        - Pois é um elemento React, no caso é  o <a>.
-    - activeClassName → a classe que quero colocar quando o link estiver ativo
+- Vai garantir que o usuário não tem acesso ao conteúdo da página caso não esteja logado.
+- Vai precisar ir na Api do prismic toda vez pra buscar o conteúdo do post.
+- Dentro do assim, teremos acesso à requisição
+- Dentro dela saber se o usuário está logado ou não;
 
 ```tsx
-interface ActiveLinkProps {
-    children: ReactElement;
-    activeClassName: string;
+export const getServerSideProps = *async* ({ req,params }) => {
+```
+
+- Passa com parâmetro o req
+- Requisição de onde ele vai buscar os cookies pra saber se está logado ou não.
+
+```tsx
+const session = await getSession({ req });
+```
+
+## PRA CARREGAR O CONTEÚDO
+
+- Vamos precisar do slug
+- pegamos no parametro 'params'
+
+```tsx
+const { slug } = params;
+```
+
+- Buscar cliente do prismic
+- Passando req como parâmetro
+
+```tsx
+const prismic = getPrismicClient(req)
+```
+
+- Buscar qualquer documento pelo UID.
+- Transformar em String
+
+```tsx
+const response = await prismic.getByUID('post',String(slug),{});
+```
+
+## FORMATAÇÃO DOS DADOS
+
+```tsx
+const post = {
+		slug,
+		title: RichText.asText(response.data.title),
+		content: RichText.asHtml(response.data.content),
+		updatedAt: new Date(response.last_publication_date).toLocaleDateString('pt-BR',{
+		day: '2-digit',
+		month: 'long',
+		year: '2-digit'
+	}),
 }
 ```
 
-- Colocar o activeLink no lugar do Link
-- Permitir que o ActiveLink receba também trodas as propriedades que o Link já recebe
-    - href e etc..
-    - extender as propridedas com LinkProps
+- Retornar o post nas props para passar lá em cima
 
-    ```tsx
-    interface ActiveLinkProps extends LinkProps{
-        children: ReactElement;
-        activeClassName: string;
-    }
-    ```
-
-- Desestruturas as props
-    - Pegar children e activeClassName
-    - O restante pode ficar dentro do "...rest"
-    - Passar o restanto no <Link>
-    - Repassar o children dentro do Link
-
-    ```bash
-    export function ActiveLink({ children, activeClassName,...rest}:ActiveLinkProps){
-        const { asPath } = useRouter();
-        
-        return (
-            <Link {...rest}>
-               {children}
-            </Link>
-        );
-    }
-    ```
-
-## Adicionar a verificação na ActiveLink
-
-- Importar o mesmo useRouter em AtiveLink
-- Criar className
-    - se asPath for igual ao que está sendo passado no href
-        - a class vai ser activeClassName
-        - se não vai ser vazia
-
-```bash
-export function ActiveLink({ children, activeClassName,...rest}:ActiveLinkProps){
-    const { asPath } = useRouter();
-    
-    const className = asPath === rest.href
-        ? activeClassName
-        : '';
-
-    return (
-        <Link {...rest}>
-            {children}
-        </Link>
-    );
+```tsx
+return {
+	props:{
+		post,
+	}
 }
 ```
 
-## Passando a classe na <a>
+# dangerouslySetInnerHTML
 
-- A <a> está sendo passado com children
-- Não temos como passar uma propriedade para o children, pois ele não é um componente.
+- Como pegamos o conteúdo do post em HTML, não conseguimos inserir ele como uma variável direto em um div.
+    - Assim, ele mostraria as próprias tags HTML em tela.
+- Porem, os elementos do React possuem uma propriedade chamada **dangerouslySetInnerHTML**, que permite que possamos passar o HTML como parâmetro.
 
-### cloneElement
-
-- Existe a propriedade cloneElement no react.
-- Ela permite clonar um elemento e modificar coisas nele.
-- Nessa caso vamos clonar children, mas adicionar com propriedade a className.
-
-```bash
-export function ActiveLink({ children, activeClassName,...rest}:ActiveLinkProps){
-    const { asPath } = useRouter();
-    
-    const className = asPath === rest.href
-        ? activeClassName
-        : '';
-
-    return (
-        <Link {...rest}>
-            {cloneElement(children,{
-                className,
-            })}
-        </Link>
-    );
+```tsx
+export default function Post ({post}:PostProps){
+return (
+  <>
+      <Head>
+          <title>{post.title} | Ignews </title>
+      </Head>
+      <main className={styles.container}>
+          <article className={styles.post}>
+              <h1>{post.title}</h1>
+              <time>{post.updatedAt}</time>
+              <div
+              className={styles.postContent} 
+              dangerouslySetInnerHTML={{__html: post.content}}/>
+          </article>
+      </main>
+  </>
+)
 }
 ```
-
--
