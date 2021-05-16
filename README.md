@@ -1,49 +1,145 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 27 - Navegação no Menu
+# 28 - Componente: ActiveLink
 
-- Podemos simplesmente usar o href na tag <a>
-
-```bash
-<nav>
-    <a className={styles.active} href="/">Home</a>
-    <a href="/posts">Posts</a>
-</nav>
-```
-
-# Então qual o problema disso?
-
-- O Next é feito com React.
-- O React, muita coisa entre uma página e outra é reaproveitado entre as páginas.
-- Se dentro do next, deixarmos apenas um <a> com href para trocar página, toda a aplicação será carregada novamente.
-    - Ele vai ficar limpando e carregando tudo de novo.
-- Utilizar somente <a>, vamos usar apenas o recurso do Next de SSR
-    - Vamos fazer todas as páginas serem renderizadas do zero
-
-# Como melhorar?
-
-- Em vez da âncora, usar um componente de dentro de next/link → Link
-- Colocar por volta das âncoras o Link
-- passar o href pro Link.
+- Manter o Link do menu selecionado na página aberta
+- Dentro do next temos o **useRouter()**
+    - Retorna algumas informações que podemos utilizar
+        - **asPath.**
+            - Mostar exatamente a rota que está sendo acessado
+            - Na home mostra apenas "/".
+- Então poderíamos passar uma comparação dentro da className de quando cada um dos links está ativo ou não.
 
 ```bash
-<nav>
-    <Link href="/">
-    <a className={styles.active} >Home</a>
-    </Link>
-    <Link href="/posts">
-    <a >Posts</a>
-    </Link>
-</nav>
+import { SignInButton } from '../SignInButton';
+import styles from './styles.module.scss';
+import Link from 'next/link';
+
+export function Header(){
+	const { asPath } = useRouter();
+	
+    return(
+        <header className={styles.headerContainer}>
+            <div className={styles.headerContent}>
+                <img src="/images/logo.svg" alt="ig.news" />
+                <nav>
+                    <Link href="/">
+                    <a className={asPath === '/' ? styles.active : '' } >Home</a>
+                    </Link>
+                    <Link href="/posts" prefetch>
+                    <a className={asPath === '/posts' ? styles.active : '' } >Posts</a>
+                    </Link>
+                </nav>
+                <SignInButton/>
+            </div>
+        </header>
+    )
+}
 ```
 
-- Deixando o ccont
-- Agora estamos aproveitando também o conceito de SPA.
-    - Aproveitando o bom do React e do Next.
-    - Reaproveitando o Core da aplicação mudando somente o conteúdo
+# Problema
 
-## Outra vantagem
+- Se for preciso fazer isso toda vez que tiver um link na aplicação fica trabalhoso
 
-- O componente link tem uma propriedade chama prefetch
-- **O prefetch, quando termina de carregar toda uma página da aplicação, pode deixar uma outra página já carregada.**
-- Bom de deixar em links que o usuário normalmente acessa.
+# Criar componente ActiveLink
+
+- Não tem estilização
+    - Só um link do next sendo que com a possibilidade de ter essa classe Active ou não.
+- Retornar o Link do proprio Next
+- Receber props
+- Criar interface ActiveLinkProps
+    - children → Vai ser um ReactElement
+        - Pois é um elemento React, no caso é  o <a>.
+    - activeClassName → a classe que quero colocar quando o link estiver ativo
+
+```tsx
+interface ActiveLinkProps {
+    children: ReactElement;
+    activeClassName: string;
+}
+```
+
+- Colocar o activeLink no lugar do Link
+- Permitir que o ActiveLink receba também trodas as propriedades que o Link já recebe
+    - href e etc..
+    - extender as propridedas com LinkProps
+
+    ```tsx
+    interface ActiveLinkProps extends LinkProps{
+        children: ReactElement;
+        activeClassName: string;
+    }
+    ```
+
+- Desestruturas as props
+    - Pegar children e activeClassName
+    - O restante pode ficar dentro do "...rest"
+    - Passar o restanto no <Link>
+    - Repassar o children dentro do Link
+
+    ```bash
+    export function ActiveLink({ children, activeClassName,...rest}:ActiveLinkProps){
+        const { asPath } = useRouter();
+        
+        return (
+            <Link {...rest}>
+               {children}
+            </Link>
+        );
+    }
+    ```
+
+## Adicionar a verificação na ActiveLink
+
+- Importar o mesmo useRouter em AtiveLink
+- Criar className
+    - se asPath for igual ao que está sendo passado no href
+        - a class vai ser activeClassName
+        - se não vai ser vazia
+
+```bash
+export function ActiveLink({ children, activeClassName,...rest}:ActiveLinkProps){
+    const { asPath } = useRouter();
+    
+    const className = asPath === rest.href
+        ? activeClassName
+        : '';
+
+    return (
+        <Link {...rest}>
+            {children}
+        </Link>
+    );
+}
+```
+
+## Passando a classe na <a>
+
+- A <a> está sendo passado com children
+- Não temos como passar uma propriedade para o children, pois ele não é um componente.
+
+### cloneElement
+
+- Existe a propriedade cloneElement no react.
+- Ela permite clonar um elemento e modificar coisas nele.
+- Nessa caso vamos clonar children, mas adicionar com propriedade a className.
+
+```bash
+export function ActiveLink({ children, activeClassName,...rest}:ActiveLinkProps){
+    const { asPath } = useRouter();
+    
+    const className = asPath === rest.href
+        ? activeClassName
+        : '';
+
+    return (
+        <Link {...rest}>
+            {cloneElement(children,{
+                className,
+            })}
+        </Link>
+    );
+}
+```
+
+-
