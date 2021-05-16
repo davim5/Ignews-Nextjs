@@ -1,80 +1,61 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 31 - Página preview do post
+# 32 - Gerando preview Static
 
-- Vai ser utilizada principalmente pelos mecanismos de busca para que os posts sejam indexados, mesmo que sejam apenas acessável por quem assina a aplicação.
-- Ver preview do post.
-- Dar opção de se inscrever
-
-# Criar
-
-- Pasta preview dentro da pasta posts
-- Copiar a [...slug] e utilizar a mesma estilização.
-
-### Código pra funcionar que vai ser explicado depois
+- Em todo getStaticProps é importate retornar a opção revalidate
+    - Diz em quando em quanto tempo o post deve ser renovado/atualizado conforme os acessos das pessoas.
+    - em segundos
 
 ```tsx
-export const getStaticPaths = () => {
-    return{
-        paths:[],
-        fallback:'blocking'
+return {
+        props:{
+            post,
+        },
+        redirect: 60 * 30,
     }
+```
+
+# GetStaticPaths
+
+- Next tem alguns comportamentos na parte de geração de sites estáticos.
+
+    ## 2 Formatos mais comuns
+
+    ### 1. **Gerar as páginas estáticas durante a build**
+
+    - Carregar previamente na hora que for rodado o ***yarn build***
+    - **Antes de ser colocado em produção, o Next vai nas páginas que precisam ser geradas estáticas e já cria o html estático de todas essas páginas, para que assim que a primeira pessoa acesse, já esteja estático e não precise aguardar ser carregado.**
+    - Nesse caso ele iria em cada um dos arquivos e já geraria o HTML.
+    - Se tivessem, milhares de páginas para carregar, isso seria inviável.
+
+    ### 2. Gerar a página estática no primeiro acesso.
+
+    - A primeira pessoa a acessar página do produto, ele vai executar a getStaticProps e armazenar o HTML de forma estática.
+
+    ### 3. Metade
+
+    - Gerar a parte estática da página de apenas alguns produtos e deixar o resto pra gerar de forma estática conforme o acesso.
+    - Não existe certo nem errado, mas pros e contras.
+
+## GetStaticPaths
+
+- Paths → Retorna quais previews de pos quero gerar durante a build
+    - Vazio → Todos serão gerados conforme são acessados
+    - Poderia ter uma chamada dos posts mais 'quentes' e retornar em um objeto os slugs.
+    - Só existe em páginas com parâmetros dinâmicos ( com os colchetes)
+- Fallback →
+    - blocking → Tipo o true, mas quando  tentar acessar um post que não foi gerado de forma estática, vai carregar na camada do next e mostrar quando tiver carregado.
+    - true → Se alguem tentar acessar um post que não foi gerado de forma estática, carregar pelo lado do browser.
+        - Causa layout shift.
+        - Não é bom pra SEO
+    - false → se o post não foi gerado de forma estática ainda, mostrar 404.
+        - Pode ser usado em ocasiões que não tem novos registros.
+
+```tsx
+export const getStaticPaths: GetStaticPaths = () => {
+  return{
+      paths:[],
+      fallback:'blocking'
+  }
 }
-```
-
-# Removendo parte do post
-
-- Remover parte do post que não deve ser exibido
-- Fazer um splice no conteúdo do post
-    - Pegar os 3 primeiros blocos de conteúdo
-
-```tsx
-const post = {
-        slug,
-        title: RichText.asText(response.data.title),
-        content: RichText.asHtml(response.data.content.splice(0,3)),
-        updatedAt: new Date(response.last_publication_date).toLocaleDateString('pt-BR',{
-            day: '2-digit',
-            month: 'long',
-            year: '2-digit' 
-        }),
-```
-
-## Fazedo degradê
-
-- Colocando outra classe na div do content.
-
-```tsx
-<div
-className={`${styles.postContent} ${styles.previewContent}`} 
-dangerouslySetInnerHTML={{__html: post.content}}/>
-```
-
-- Se o a classe postContent for também um previewContent, adicionar um linear gradient.
-
-```tsx
-&.previewContent{
-    background: linear-gradient(var(--gray-100),transparent);
-    background-clip: text;
-    -webkit-text-fill-color: transparent; // fazer gradiente no texto
-}
-```
-
-# Verificar se o usuário está logado e redirecionar.
-
-- Se a pessoa está logada e tem uma inscrição ativa, é melhor ela não ver o preview do post, mas o post original completo.
-- Como isso é estático, não há como fazer uma verificação.
-- A única forma de saber se o usuário está logado é por dentro do proprio componente PostPreview.
-- useSession
-- useEffect se a session mudar.
-    - Não deixar o array vazio.
-    - Ele funcionaria com array vazio, mas assim ele só vai executar a verificação no momento em que a página for carregada.
-    - Se o useEffect for de acordo com o session, se o usuário logar na hora, ele já vai ser redirecionado para a página com conteúdo completo.
-
-```tsx
-useEffect(() => {
-    if(session?.activeSubscription) {
-        router.push(`/posts/${post.slug}`)
-    }
-},[session]);
 ```
