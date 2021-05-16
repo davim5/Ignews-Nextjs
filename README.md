@@ -1,108 +1,118 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-# 29 - Página: Post
+# 30 - Validando Assinatura Ativa
 
-- Dentro da API roots, quando a página é dinâmica ela não vai ser de um post, mas de todos os posts.
-- Preciso saber qual post quero mostrar, baseado no id por exemplo.
+- Validar se a assinatura do usuário está ativa para mostrar o conteúdo do post.
+- Precisamos passar no useSession se o usuário logado possui uma inscrição ativa ou não.
+    - Poderia usar o getStaticProps, mas se precisarmos dessa informação em outra páginas, vai tornar o processo trabalhoso.
 
-# Como
+# Modificando os dados dentro do Session
 
-- Criar arquivo
-- Usar colchete pro nome do parâmetro
+- Novo callback no [...nextauth].
+- Passando a session
 
-# Para acessar o conteúdo do post, precisa de uma assinatura.
+## Encontrar a informação de se o usuário está com a inscrição ativa.
 
-- Se for gerada de forma estática, a página não será protegida.
-
-## Usando ServerSideProps
-
-- Vai garantir que o usuário não tem acesso ao conteúdo da página caso não esteja logado.
-- Vai precisar ir na Api do prismic toda vez pra buscar o conteúdo do post.
-- Dentro do assim, teremos acesso à requisição
-- Dentro dela saber se o usuário está logado ou não;
+- Pegar dados da inscrição pelo Id(ref) do usuário.
+- Comparar com o id(ref) do usuário logado.
+    - Buscar informação do usuário logado a partir do email passado na session.
+- Verificar se a inscrição está a ativa ou não.
+- **Se encontrar:**
+    - Retornar session com tudo que já tinha na session mais a nova variável que armazena o status.
+- **Se não encontrar:**
+    - Retornar session com tudo que já tinha na session mais a nova variável que armazena o status como **null.**
 
 ```tsx
-export const getServerSideProps = *async* ({ req,params }) => {
+callbacks: {
+    async session(session){
+
+      try {
+        const userActiveSubscription = await fauna.query(
+          q.Get(
+            q.Intersection([
+              q.Match(
+                q.Index('subscription_by_user_ref'),
+                q.Select(
+                  'ref',
+                  q.Get(
+                    q.Match(
+                      q.Index('user_by_email'),
+                      q.Casefold(session.user.email)
+                    )
+                  )
+                )
+              ),
+              q.Match(
+                q.Index('subscription_by_status'),
+                "active"
+              )
+               ])
+          )
+        )
+  
+        return {
+          ...session,
+          activeSubscription:userActiveSubscription
+        };
+      } catch {
+        return {
+          ...session,
+          activeSubscription: null
+        }
+      }
+    },
 ```
 
-- Passa com parâmetro o req
-- Requisição de onde ele vai buscar os cookies pra saber se está logado ou não.
+# Redirecionando o usuário
+
+- Na pagina do post [...slug], se o usuário não for inscrito, redirecioná-lo para a Home.
 
 ```tsx
-const session = await getSession({ req });
+// Redirecionando caso a inscrição do usuário não esteja ativa
+    if(!session.activeSubscription) {
+        return {
+            redirect:{
+                destination:'/',
+                permanent: false,
+            }
+        }
+    }
 ```
 
-## PRA CARREGAR O CONTEÚDO
+# Evitando que o usuário se inscreva mais de uma vez.
 
-- Vamos precisar do slug
-- pegamos no parametro 'params'
-
-```tsx
-const { slug } = params;
-```
-
-- Buscar cliente do prismic
-- Passando req como parâmetro
+- Agora que a session também envia o status da inscrição do usuário.
+- Na função HandleSubscribe
+    - Verificar se o usuário logado já possui inscrição ativa ou não.
+    - Se tiver: mandar para a página posts.
+- 
 
 ```tsx
-const prismic = getPrismicClient(req)
-```
+export function SubscribeButton({priceId}:SubscribeButtonProps){
+    const [session] = useSession();
+    const router = useRouter();
 
-- Buscar qualquer documento pelo UID.
-- Transformar em String
+    async function handleSubscribe(){
+        if (!session){
+            signIn('github');
+            return;
+        }
 
-```tsx
-const response = await prismic.getByUID('post',String(slug),{});
-```
+        if(session.activeSubscription){
+            router.push('/posts');
+            return;
+        }
 
-## FORMATAÇÃO DOS DADOS
+        try{
+            const response = await api.post('/subscribe');
 
-```tsx
-const post = {
-		slug,
-		title: RichText.asText(response.data.title),
-		content: RichText.asHtml(response.data.content),
-		updatedAt: new Date(response.last_publication_date).toLocaleDateString('pt-BR',{
-		day: '2-digit',
-		month: 'long',
-		year: '2-digit'
-	}),
-}
-```
+            const { sessionId  } = response.data;
 
-- Retornar o post nas props para passar lá em cima
+            const stripe = await getStripeJs();
 
-```tsx
-return {
-	props:{
-		post,
-	}
-}
-```
-
-# dangerouslySetInnerHTML
-
-- Como pegamos o conteúdo do post em HTML, não conseguimos inserir ele como uma variável direto em um div.
-    - Assim, ele mostraria as próprias tags HTML em tela.
-- Porem, os elementos do React possuem uma propriedade chamada **dangerouslySetInnerHTML**, que permite que possamos passar o HTML como parâmetro.
-
-```tsx
-export default function Post ({post}:PostProps){
-return (
-  <>
-      <Head>
-          <title>{post.title} | Ignews </title>
-      </Head>
-      <main className={styles.container}>
-          <article className={styles.post}>
-              <h1>{post.title}</h1>
-              <time>{post.updatedAt}</time>
-              <div
-              className={styles.postContent} 
-              dangerouslySetInnerHTML={{__html: post.content}}/>
-          </article>
-      </main>
-  </>
-)
-}
+            await stripe.redirectToCheckout({ sessionId })
+        }catch(err){
+            alert(err.message);
+        }
+    }
 ```

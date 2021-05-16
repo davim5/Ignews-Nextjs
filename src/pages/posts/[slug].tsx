@@ -1,4 +1,5 @@
 import { getSession } from "next-auth/client"
+import { useRouter } from "next/dist/client/router";
 import Head from "next/head";
 import { RichText } from "prismic-dom";
 import { getPrismicClient } from "../../services/prismic";
@@ -39,9 +40,17 @@ export default function Post ({post}:PostProps){
 // Dentro do assim, teremos acesso à requisição
     // Dentro dela saber se o usuário está logado ou não;
 export const getServerSideProps = async ({ req,params }) => {
-    // Passa com parâmetro o req
-        // Requisição de onde ele vai buscar os cookies pra saber se está logado ou não.
     const session = await getSession({ req });
+
+    // Redirecionando caso a inscrição do usuário não esteja ativa
+    if(!session.activeSubscription) {
+        return {
+            redirect:{
+                destination:'/',
+                permanent: false,
+            }
+        }
+    }
 
     
     // PRA CARREGAR O CONTEÚDO
@@ -77,7 +86,6 @@ export const getServerSideProps = async ({ req,params }) => {
         }
     }
 
-    // if(!session) {
-    // }
+    
 
 }
